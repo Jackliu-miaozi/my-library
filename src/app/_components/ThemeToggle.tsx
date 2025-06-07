@@ -7,7 +7,7 @@ import { useTheme } from '../context/ThemeContext';
  * 主题切换悬浮挂件组件
  * 悬浮在页面右下角，提供主题切换功能
  */
-export default function ThemeToggle() {
+const ThemeToggle = () => {
   const { theme, toggleTheme, isLoading } = useTheme();
   const [isHovered, setIsHovered] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
@@ -156,4 +156,6 @@ export default function ThemeToggle() {
       `}</style>
     </>
   );
-}
+};
+
+export default ThemeToggle;

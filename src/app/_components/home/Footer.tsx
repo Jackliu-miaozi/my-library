@@ -6,7 +6,7 @@ import { BookOpen, Mail, Phone, MapPin, Github, Twitter, Facebook, Instagram, He
  * 图书馆Footer组件
  * 具有现代化异形设计和动画效果，与整体风格保持一致
  */
-export default function Footer() {
+const Footer = () => {
   /**
    * 滚动到页面顶部
    */
@@ -36,11 +36,11 @@ export default function Footer() {
                 <p className="text-purple-200 dark:text-gray-400 transition-colors duration-300">Knowledge Gateway</p>
               </div>
             </div>
-            
+
             <p className="text-purple-200 dark:text-gray-300 leading-relaxed max-w-md transition-colors duration-300">
               致力于为读者提供最优质的阅读体验和学术研究支持，连接传统与现代，开启知识探索之旅。
             </p>
-            
+
             {/* 社交媒体链接 */}
             <div className="flex space-x-4">
               {[
@@ -109,7 +109,7 @@ export default function Footer() {
                 );
               })}
             </div>
-            
+
             {/* 开放时间 */}
             <div className="mt-6">
               <h5 className="text-sm font-medium text-white dark:text-gray-100 mb-2 transition-colors duration-300">开放时间</h5>
@@ -130,7 +130,7 @@ export default function Footer() {
               <Heart className="w-4 h-4 text-pink-400 animate-pulse" />
               <span>用心服务每一位读者</span>
             </div>
-            
+
             {/* 回到顶部按钮 */}
             <button
               onClick={scrollToTop}
@@ -148,4 +148,6 @@ export default function Footer() {
       <div className="absolute bottom-12 left-1/2 w-1 h-1 bg-blue-400 rounded-full animate-pulse delay-2000"></div>
     </footer>
   );
-}
+};
+
+export default Footer;

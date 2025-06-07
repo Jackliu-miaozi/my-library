@@ -9,17 +9,18 @@ import Link from 'next/link';
 /**
  * 现代化图书馆导航栏组件
  * 具有异形设计和响应式布局，支持多种登录方式
+ * 使用useMemo优化，只在登录状态变化时重新渲染
  */
 export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isNetworkMenuOpen, setIsNetworkMenuOpen] = useState(false);
-  
+
   const { data: session } = useSession();
   const { account, chainId, networkName, isConnected, switchNetwork, disconnectWallet } = useWeb3();
-  
+
   const networkMenuRef = useRef<HTMLDivElement>(null);
-  
+
   // 点击外部关闭网络菜单
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -27,16 +28,16 @@ export default function Navbar() {
         setIsNetworkMenuOpen(false);
       }
     };
-    
+
     if (isNetworkMenuOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
-    
+
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isNetworkMenuOpen]);
-  
+
   // 支持的网络配置
   const supportedChains = [
     { id: 1, name: 'Ethereum Mainnet' },
@@ -44,7 +45,7 @@ export default function Navbar() {
     { id: 1287, name: 'Moonbase Alpha' },
     { id: 420420421, name: 'Asset‑Hub Westend Testnet' }
   ];
-  
+
   const currentChain = supportedChains.find(chain => chain.id === chainId);
 
   /**
@@ -119,10 +120,12 @@ export default function Navbar() {
   const userInfo = getUserDisplayInfo();
   const isLoggedIn = !!userInfo;
 
-  return (
-    <nav className="relative bg-white/5 dark:bg-gray-800/10 backdrop-blur-lg shadow-2xl border-b border-white/10 dark:border-gray-600/20 transition-colors duration-300">
-
-
+  /**
+   * 使用useMemo优化组件渲染，只在登录状态相关依赖变化时重新渲染
+   * 依赖项包括：session数据、Web3连接状态、账户地址、链ID
+   */
+  const navbarContent =
+    <nav className="relative bg-white/5 dark:bg-gray-800/10 backdrop-blur-lg shadow-2xl border-b border-white/10 dark:border-gray-600/20 transition-colors duration-300 z-[9998]">
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
           {/* Logo 区域 - 异形设计 */}
@@ -142,13 +145,12 @@ export default function Navbar() {
           </div>
 
           {/* 中央搜索区域 - 异形搜索框 */}
-          <div className="hidden md:flex flex-1 max-w-2xl mx-8">
-            <div className={`relative w-full transition-all duration-300 ${
-              isSearchFocused ? 'transform scale-105' : ''
-            }`}>
+          <div className="hidden md:flex flex-1 max-w-2xl mx-8 relative z-[1]">
+            <div className={`relative w-full transition-all duration-300 ${isSearchFocused ? 'transform scale-105' : ''
+              }`}>
               <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full blur opacity-30"></div>
               <div className="relative flex items-center">
-                <Search className="absolute left-4 w-5 h-5 text-gray-400 z-10" />
+                <Search className="absolute left-4 w-5 h-5 text-gray-400 z-[2]" />
                 <input
                   type="text"
                   placeholder="搜索图书、作者、ISBN..."
@@ -197,11 +199,10 @@ export default function Navbar() {
                 {/* 用户信息显示 */}
                 <div className="hidden sm:flex items-center space-x-2 px-3 py-2 bg-white/10 dark:bg-gray-700/30 rounded-xl backdrop-blur-sm">
                   <div className="relative">
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-                      userInfo.type === 'web3' 
-                        ? 'bg-gradient-to-br from-green-400 to-emerald-500' 
-                        : 'bg-gradient-to-br from-blue-400 to-purple-500'
-                    }`}>
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${userInfo.type === 'web3'
+                      ? 'bg-gradient-to-br from-green-400 to-emerald-500'
+                      : 'bg-gradient-to-br from-blue-400 to-purple-500'
+                      }`}>
                       {userInfo.type === 'web3' ? (
                         <div className="w-4 h-4 bg-white rounded-sm"></div>
                       ) : (
@@ -217,7 +218,7 @@ export default function Navbar() {
                     </p>
                   </div>
                 </div>
-                
+
                 {/* 网络切换按钮 - 仅Web3用户显示 */}
                 {userInfo?.type === 'web3' && (
                   <div ref={networkMenuRef} className="relative hidden sm:block">
@@ -229,10 +230,10 @@ export default function Navbar() {
                       <Network className="w-4 h-4" />
                       <span className="text-sm font-medium">网络</span>
                     </button>
-                    
+
                     {/* 网络切换下拉菜单 */}
                     {isNetworkMenuOpen && (
-                      <div className="absolute top-full right-0 mt-2 w-64 bg-white/95 dark:bg-gray-800/95 backdrop-blur-lg rounded-xl shadow-2xl border border-white/20 dark:border-gray-600/30 z-[100]">
+                      <div className="absolute top-full right-0 mt-2 w-64 bg-white/95 dark:bg-gray-800/95 backdrop-blur-lg rounded-xl shadow-2xl border border-white/20 dark:border-gray-600/30 z-[9999]">
                         <div className="p-3">
                           <div className="text-xs text-gray-600 dark:text-gray-400 font-medium mb-2 px-2">
                             选择网络
@@ -242,11 +243,10 @@ export default function Navbar() {
                               <button
                                 key={networkChain.id}
                                 onClick={(event) => handleNetworkSwitch(networkChain.id, event)}
-                                className={`w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-all duration-200 cursor-pointer ${
-                                  chainId === networkChain.id
-                                    ? 'bg-blue-500/20 text-blue-600 dark:text-blue-400'
-                                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50'
-                                }`}
+                                className={`w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-all duration-200 cursor-pointer ${chainId === networkChain.id
+                                  ? 'bg-blue-500/20 text-blue-600 dark:text-blue-400'
+                                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50'
+                                  }`}
                               >
                                 <span className="font-medium">{networkChain.name}</span>
                                 {chainId === networkChain.id && (
@@ -260,7 +260,7 @@ export default function Navbar() {
                     )}
                   </div>
                 )}
-                
+
                 {/* 登出按钮 */}
                 <button
                   onClick={handleLogout}
@@ -307,7 +307,7 @@ export default function Navbar() {
 
       {/* 移动端菜单 */}
       {isMenuOpen && (
-        <div className="lg:hidden absolute top-full left-0 right-0 bg-gradient-to-b from-purple-900/95 to-indigo-900/95 dark:from-gray-900/95 dark:to-gray-800/95 backdrop-blur-lg border-t border-white/10 dark:border-gray-600/20 shadow-2xl z-[100] transition-colors duration-300">
+        <div className="lg:hidden absolute top-full left-0 right-0 bg-gradient-to-b from-purple-900/95 to-indigo-900/95 dark:from-gray-900/95 dark:to-gray-800/95 backdrop-blur-lg border-t border-white/10 dark:border-gray-600/20 shadow-2xl z-[9999] transition-colors duration-300">
           <div className="px-4 py-6 space-y-3">
             {[
               { icon: Home, label: '首页', href: '/' },
@@ -327,7 +327,7 @@ export default function Navbar() {
                 </a>
               );
             })}
-            
+
             {/* 移动端登录/登出按钮 */}
             <div className="border-t border-white/10 pt-3 mt-3">
               {isLoggedIn ? (
@@ -335,11 +335,10 @@ export default function Navbar() {
                   {/* 移动端用户信息 */}
                   <div className="flex items-center space-x-3 px-4 py-3 bg-white/10 rounded-xl">
                     <div className="relative">
-                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-                        userInfo.type === 'web3' 
-                          ? 'bg-gradient-to-br from-green-400 to-emerald-500' 
-                          : 'bg-gradient-to-br from-blue-400 to-purple-500'
-                      }`}>
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${userInfo.type === 'web3'
+                        ? 'bg-gradient-to-br from-green-400 to-emerald-500'
+                        : 'bg-gradient-to-br from-blue-400 to-purple-500'
+                        }`}>
                         {userInfo.type === 'web3' ? (
                           <div className="w-4 h-4 bg-white rounded-sm"></div>
                         ) : (
@@ -369,7 +368,7 @@ export default function Navbar() {
 
                       {/* 移动端网络选择 */}
                       {isNetworkMenuOpen && (
-                        <div className="bg-white/5 rounded-xl p-3 space-y-2">
+                        <div className="bg-white/5 rounded-xl p-3 space-y-2 relative z-[9999]">
                           <div className="text-xs text-white/70 px-2 font-medium">
                             选择网络
                           </div>
@@ -377,11 +376,10 @@ export default function Navbar() {
                             <button
                               key={networkChain.id}
                               onClick={(event) => handleNetworkSwitch(networkChain.id, event)}
-                              className={`w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-all duration-200  ${
-                                chainId === networkChain.id
-                                  ? 'bg-blue-500/20 text-blue-400'
-                                  : 'text-white/90 hover:bg-white/10'
-                              }`}
+                              className={`w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-all duration-200  ${chainId === networkChain.id
+                                ? 'bg-blue-500/20 text-blue-400'
+                                : 'text-white/90 hover:bg-white/10'
+                                }`}
                             >
                               <span>{networkChain.name}</span>
                               {chainId === networkChain.id && (
@@ -393,7 +391,7 @@ export default function Navbar() {
                       )}
                     </div>
                   )}
-                  
+
                   {/* 移动端登出按钮 */}
                   <button
                     onClick={() => {
@@ -422,5 +420,6 @@ export default function Navbar() {
         </div>
       )}
     </nav>
-  );
+
+  return navbarContent;
 }

@@ -6,6 +6,8 @@ import { ThemeProvider } from "./context/ThemeContext";
 import { TRPCReactProvider } from "@/trpc/react";
 import { SessionProvider } from "next-auth/react";
 import { Web3Provider } from "./context/Web3ContextNoWC";
+import UnifiedBackground from "./_components/UnifiedBackground";
+import { auth } from "@/server/auth";
 
 export const metadata: Metadata = {
   title: "Create T3 App",
@@ -18,9 +20,10 @@ const geist = Geist({
   variable: "--font-geist-sans",
 });
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const session = await auth();
   return (
     <html lang="en" className={`${geist.variable}`}>
       <head>
@@ -43,9 +46,13 @@ export default function RootLayout({
       <body suppressHydrationWarning={true}>
         <ThemeProvider>
           <TRPCReactProvider>
-            <SessionProvider>
+            <SessionProvider session={session}>
               <Web3Provider>
-                {children}
+                <UnifiedBackground>
+
+                  {children}
+
+                </UnifiedBackground>
               </Web3Provider>
             </SessionProvider>
           </TRPCReactProvider>

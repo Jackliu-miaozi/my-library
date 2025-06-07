@@ -1,22 +1,27 @@
 import "@/styles/globals.css";
 
-import { TRPCReactProvider } from "@/trpc/react";
-import { ThemeProvider } from "../context/ThemeContext";
-import { SessionProvider } from "next-auth/react";
-import { Web3Provider } from "../context/Web3ContextNoWC";
+import Footer from "../_components/home/Footer";
+import ThemeToggle from "../_components/ThemeToggle";
+import Navbar from "../_components/home/Navbar";
 
-export default function RootLayout({
+
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+
+
   return (
-    <ThemeProvider>
-      <TRPCReactProvider>
-        <SessionProvider>
-          <Web3Provider>
-            {children}
-          </Web3Provider>
-        </SessionProvider>
-      </TRPCReactProvider>
-    </ThemeProvider>
+    <>
+      <div className="z-[9999]">
+        <Navbar />
+      </div>
+      <div className="z-[10]">
+        {children}
+      </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-center">
+        <ThemeToggle />
+      </div>
+      <Footer />
+    </>
   );
 }

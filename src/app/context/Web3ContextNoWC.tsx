@@ -2,124 +2,16 @@
 
 // 导入必要的React相关依赖
 import type React from "react" // 导入React类型定义
-import { createContext, useContext } from "react" // 导入Context相关hooks
-import { WagmiProvider, createConfig } from "wagmi" // 导入wagmi的Provider组件和配置创建函数
-import { mainnet, sepolia, moonbaseAlpha, type Chain } from "wagmi/chains" // 导入支持的区块链网络
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query" // 导入数据查询相关组件
+import { createContext, useContext, useMemo, useCallback } from "react" // 导入Context相关hooks
+import { WagmiProvider } from "wagmi" // 导入wagmi的Provider组件
+import { QueryClientProvider } from "@tanstack/react-query" // 导入数据查询相关组件
 import { useAccount, useChainId, useConnect, useDisconnect, useSwitchChain } from "wagmi" // 导入wagmi的hooks
-import { http } from "wagmi" // 导入HTTP传输层
-import { injected, metaMask, coinbaseWallet } from "wagmi/connectors" // 导入连接器
 // 导入类型定义
 import type { Web3ContextType, Web3ProviderProps } from "@/types/web3"
+// 导入wagmi配置
+import { wagmiConfig, queryClient, SUPPORTED_NETWORKS, getCurrentNetworkInfo } from "@/lib/wagmi-config"
 
-/**
- * Asset-Hub Westend Testnet 网络配置
- */
-const assetHubWestendTestnet: Chain = {
-  id: 420420421,
-  name: 'Asset‑Hub Westend Testnet',
-  nativeCurrency: {
-    name: 'Westend DOT',
-    symbol: 'WND',
-    decimals: 18,
-  },
-  rpcUrls: {
-    default: {
-      http: ['https://westend-asset-hub-eth-rpc.polkadot.io'],
-    },
-    public: {
-      http: ['https://westend-asset-hub-eth-rpc.polkadot.io'],
-    },
-  },
-  blockExplorers: {
-    default: {
-      name: 'Blockscout',
-      url: 'https://blockscout-asset-hub.parity-chains-scw.parity.io',
-    },
-    blockscout: {
-      name: 'Blockscout',
-      url: 'https://blockscout-asset-hub.parity-chains-scw.parity.io',
-    },
-  },
-  testnet: true,
-}
 
-/**
- * 支持的网络配置
- */
-const SUPPORTED_NETWORKS = {
-  1: { // Ethereum主网配置
-    name: "Ethereum Mainnet",
-    symbol: "ETH",
-    decimals: 18,
-    explorer: "https://etherscan.io"
-  },
-  11155111: { // Sepolia测试网配置
-    name: "Sepolia Testnet",
-    symbol: "ETH",
-    decimals: 18,
-    explorer: "https://sepolia.etherscan.io"
-  },
-  1287: { // Moonbase Alpha测试网配置
-    name: "Moonbase Alpha",
-    symbol: "DEV",
-    decimals: 18,
-    explorer: "https://moonbase.moonscan.io"
-  },
-  420420421: { // Asset-Hub Westend测试网配置
-    name: "Asset‑Hub Westend Testnet",
-    symbol: "WND",
-    decimals: 18,
-    explorer: "https://blockscout-asset-hub.parity-chains-scw.parity.io"
-  }
-}
-
-/**
- * 获取当前网络信息
- * @param chainId - 链ID
- * @returns 网络信息或null
- */
-const getCurrentNetworkInfo = (chainId: number) => {
-  return SUPPORTED_NETWORKS[chainId as keyof typeof SUPPORTED_NETWORKS] || null // 根据chainId返回对应的网络信息，如果不存在返回null
-}
-
-/**
- * Wagmi配置 - 不使用WalletConnect
- * 仅使用本地钱包连接器，避免WalletConnect相关错误
- */
-const config = createConfig({
-  chains: [ // 支持的链
-    mainnet,
-    sepolia,
-    moonbaseAlpha,
-    assetHubWestendTestnet,
-  ],
-  connectors: [ // 连接器配置 - 仅使用本地钱包
-    injected(), // 注入式钱包（如MetaMask、Trust Wallet等）
-    metaMask(), // MetaMask专用连接器
-    coinbaseWallet({ // Coinbase Wallet连接器
-      appName: "Library Management System",
-    }),
-  ],
-  transports: { // 各链的传输层配置
-    [mainnet.id]: http(),
-    [sepolia.id]: http(),
-    [moonbaseAlpha.id]: http(),
-    [assetHubWestendTestnet.id]: http(),
-  },
-  ssr: true, // 启用服务端渲染
-})
-
-/**
- * React Query客户端
- */
-const queryClient = new QueryClient({ // 创建React Query客户端实例
-  defaultOptions: {
-    queries: {
-      staleTime: 60 * 1000, // 设置数据过期时间为1分钟
-    },
-  },
-})
 
 
 
@@ -150,7 +42,7 @@ function Web3Hook({ children }: { children: React.ReactNode }) {
    * 连接钱包
    * @param walletType - 钱包类型（可选）
    */
-  const connectWallet = (walletType?: string) => {
+  const connectWallet = useCallback((walletType?: string) => {
     // 调试：打印所有可用连接器的信息
     console.log('可用连接器:', connectors.map(c => ({
       id: c.id,
@@ -218,20 +110,20 @@ function Web3Hook({ children }: { children: React.ReactNode }) {
     } else {
       console.warn('没有可用的钱包连接器')
     }
-  }
+  }, [connect, connectors])
 
   /**
    * 断开钱包连接
    */
-  const disconnectWallet = () => {
+  const disconnectWallet = useCallback(() => {
     disconnect() // 断开钱包连接
-  }
+  }, [disconnect])
 
   /**
    * 切换网络
    * @param targetChainId - 目标链ID
    */
-  const switchNetwork = async (targetChainId: number) => {
+  const switchNetwork = useCallback(async (targetChainId: number) => {
     try {
       console.log('正在切换到网络:', targetChainId)
       switchChain({ chainId: targetChainId }) // 切换到目标网络
@@ -240,10 +132,10 @@ function Web3Hook({ children }: { children: React.ReactNode }) {
       console.error("切换网络失败:", error)
       throw error
     }
-  }
+  }, [switchChain])
 
-  // 创建context值
-  const contextValue: Web3ContextType = {
+  // 使用useMemo优化context值，避免不必要的重新渲染
+  const contextValue: Web3ContextType = useMemo(() => ({
     account: address,
     chainId,
     networkName,
@@ -254,7 +146,18 @@ function Web3Hook({ children }: { children: React.ReactNode }) {
     disconnectWallet,
     switchNetwork,
     availableConnectors
-  }
+  }), [
+    address,
+    chainId,
+    networkName,
+    isConnected,
+    isNetworkSupported,
+    isCorrectNetwork,
+    connectWallet,
+    disconnectWallet,
+    switchNetwork,
+    availableConnectors
+  ])
 
   return (
     <Web3Context.Provider value={contextValue}>
@@ -272,7 +175,7 @@ function Web3Hook({ children }: { children: React.ReactNode }) {
  */
 export function Web3Provider({ children }: Web3ProviderProps) {
   return (
-    <WagmiProvider config={config}> {/* 提供wagmi配置 */}
+    <WagmiProvider config={wagmiConfig}> {/* 提供wagmi配置 */}
       <QueryClientProvider client={queryClient}> {/* 提供React Query客户端 */}
         <Web3Hook>
           {children}
@@ -295,5 +198,4 @@ export function useWeb3() {
   return context
 }
 
-// 导出网络配置和工具函数
-export { SUPPORTED_NETWORKS, getCurrentNetworkInfo }
+// 网络配置和工具函数已从 @/lib/wagmi-config 导入

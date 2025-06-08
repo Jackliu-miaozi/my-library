@@ -1,8 +1,9 @@
 "use client"
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, BookOpen, User, Menu, X, Home, Calendar, LogIn, LogOut, Network } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
-import { useWeb3 } from '../../context/Web3ContextNoWC';
+import { useAccount, useChainId, useDisconnect, useSwitchChain} from 'wagmi';
+import { SUPPORTED_NETWORKS } from '@/lib/wagmi-config';
 
 import Link from 'next/link';
 
@@ -17,8 +18,12 @@ export default function Navbar() {
   const [isNetworkMenuOpen, setIsNetworkMenuOpen] = useState(false);
 
   const { data: session } = useSession();
-  const { account, chainId, networkName, isConnected, switchNetwork, disconnectWallet } = useWeb3();
-
+  const account = useAccount();
+  // - wagmi 的默认配置或缓存中保存的是链ID 1
+  // - 钱包在重连过程中临时返回主网ID
+  const chainId = useChainId();
+  const { disconnect: disconnectWallet } = useDisconnect();
+  const { switchChain } = useSwitchChain();
   const networkMenuRef = useRef<HTMLDivElement>(null);
 
   // 点击外部关闭网络菜单
@@ -39,14 +44,15 @@ export default function Navbar() {
   }, [isNetworkMenuOpen]);
 
   // 支持的网络配置
-  const supportedChains = [
-    { id: 1, name: 'Ethereum Mainnet' },
-    { id: 11155111, name: 'Sepolia Testnet' },
-    { id: 1287, name: 'Moonbase Alpha' },
-    { id: 420420421, name: 'Asset‑Hub Westend Testnet' }
-  ];
+  const supportedChains = Object.entries(SUPPORTED_NETWORKS).map(([id, info]) => ({
+    id: parseInt(id),
+    name: info.name
+  }));
 
-  const currentChain = supportedChains.find(chain => chain.id === chainId);
+  // 只有在钱包已连接且不在重连状态时才查找网络信息
+  const currentChain = (account?.isConnected && !account?.isReconnecting) 
+    ? supportedChains.find(chain => chain.id === chainId)
+    : null;
 
   /**
    * 切换移动端菜单显示状态
@@ -73,7 +79,7 @@ export default function Navbar() {
     if (session) {
       await signOut({ redirect: false });
     }
-    if (isConnected) {
+    if (account.isConnected) {
       disconnectWallet();
     }
   };
@@ -84,7 +90,7 @@ export default function Navbar() {
   const handleNetworkSwitch = async (targetChainId: number, event: React.MouseEvent) => {
     event.stopPropagation(); // 阻止事件冒泡
     try {
-      await switchNetwork(targetChainId);
+      switchChain({ chainId: targetChainId });
       setIsNetworkMenuOpen(false);
     } catch (error) {
       console.error('网络切换失败:', error);
@@ -108,9 +114,9 @@ export default function Navbar() {
         type: 'credentials'
       };
     }
-    if (isConnected && account) {
+    if (account) {
       return {
-        name: `${account.slice(0, 6)}...${account.slice(-4)}`,
+        name: account.address ? `${account.address.slice(0, 6)}...${account.address.slice(-4)}` : '连接中……',
         type: 'web3'
       };
     }
@@ -124,7 +130,7 @@ export default function Navbar() {
    * 使用useMemo优化组件渲染，只在登录状态相关依赖变化时重新渲染
    * 依赖项包括：session数据、Web3连接状态、账户地址、链ID
    */
-  const navbarContent =
+  const navbarContent = useMemo(() =>
     <nav className="relative bg-white/5 dark:bg-gray-800/10 backdrop-blur-lg shadow-2xl border-b border-white/10 dark:border-gray-600/20 transition-colors duration-300 z-[9998]">
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
@@ -214,7 +220,7 @@ export default function Navbar() {
                   <div className="text-sm">
                     <p className="text-white font-medium">{userInfo.name}</p>
                     <p className="text-white/70 text-xs">
-                      {userInfo.type === 'web3' ? `Web3用户 · ${currentChain?.name ?? networkName ?? '未知网络'}` : '邮箱用户'}
+                      {userInfo.type === 'web3' ? `Web3用户 · ${currentChain?.name ?? '获取网络中……'}` : '邮箱用户'}
                     </p>
                   </div>
                 </div>
@@ -350,7 +356,7 @@ export default function Navbar() {
                     <div className="text-sm flex-1">
                       <p className="text-white font-medium">{userInfo.name}</p>
                       <p className="text-white/70 text-xs">
-                        {userInfo.type === 'web3' ? `Web3用户 · ${currentChain?.name ?? networkName ?? '未知网络'}` : '邮箱用户'}
+                        {userInfo.type === 'web3' ? `Web3用户 · ${currentChain?.name ?? '获取网络中……'}` : '邮箱用户'}
                       </p>
                     </div>
                   </div>
@@ -419,7 +425,8 @@ export default function Navbar() {
           </div>
         </div>
       )}
-    </nav>
+      {/* eslint-disable-next-line react-hooks/exhaustive-deps */}
+    </nav>, [isSearchFocused, isLoggedIn, userInfo!.type, userInfo!.name, currentChain?.name, toggleNetworkMenu, isNetworkMenuOpen, supportedChains, handleLogout, toggleMenu, isMenuOpen, chainId, handleNetworkSwitch]);
 
   return navbarContent;
 }

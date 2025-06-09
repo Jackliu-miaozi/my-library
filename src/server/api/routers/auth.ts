@@ -2,10 +2,7 @@ import { z } from "zod";
 import * as bcrypt from "bcryptjs";
 import { TRPCError } from "@trpc/server";
 
-import {
-  createTRPCRouter,
-  publicProcedure,
-} from "@/server/api/trpc";
+import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
 import { users } from "@/server/db/schema";
 
 /**
@@ -18,11 +15,17 @@ export const authRouter = createTRPCRouter({
   register: publicProcedure
     .input(
       z.object({
-        name: z.string().min(2, "用户名至少2个字符").max(50, "用户名最多50个字符"),
+        name: z
+          .string()
+          .min(2, "用户名至少2个字符")
+          .max(50, "用户名最多50个字符"),
         email: z.string().email("请输入有效的邮箱地址"),
-        password: z.string().min(6, "密码至少6个字符").max(100, "密码最多100个字符"),
+        password: z
+          .string()
+          .min(6, "密码至少6个字符")
+          .max(100, "密码最多100个字符"),
         confirmPassword: z.string(),
-      })
+      }),
     )
 
     .mutation(async ({ ctx, input }) => {
@@ -54,15 +57,18 @@ export const authRouter = createTRPCRouter({
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
         // 创建新用户
-        const newUser = await ctx.db.insert(users).values({
-          name,
-          email,
-          password: hashedPassword,
-        }).returning({
-          id: users.id,
-          name: users.name,
-          email: users.email,
-        });
+        const newUser = await ctx.db
+          .insert(users)
+          .values({
+            name,
+            email,
+            password: hashedPassword,
+          })
+          .returning({
+            id: users.id,
+            name: users.name,
+            email: users.email,
+          });
 
         return {
           success: true,
@@ -81,8 +87,8 @@ export const authRouter = createTRPCRouter({
         });
       }
     }),
-    
-    checkEmailAvailability: publicProcedure
+
+  checkEmailAvailability: publicProcedure
     .input(z.object({ email: z.string().email() }))
     .query(async ({ ctx, input }) => {
       const existingUser = await ctx.db.query.users.findFirst({

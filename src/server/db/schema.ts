@@ -10,8 +10,6 @@ import { type AdapterAccount } from "next-auth/adapters";
  */
 export const createTable = sqliteTableCreator((name) => `my-library_${name}`);
 
-
-
 export const users = createTable("user", (d) => ({
   id: d
     .text({ length: 255 })
@@ -84,4 +82,37 @@ export const verificationTokens = createTable(
     expires: d.integer({ mode: "timestamp" }).notNull(),
   }),
   (t) => [primaryKey({ columns: [t.identifier, t.token] })],
+);
+
+/**
+ * 图书表
+ */
+export const books = createTable(
+  "book",
+  (d) => ({
+    id: d
+      .text({ length: 255 })
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    title: d.text({ length: 500 }).notNull(),
+    author: d.text({ length: 255 }).notNull(),
+    isbn: d.text({ length: 20 }).notNull().unique(),
+    category: d.text({ length: 100 }).notNull(),
+    publishYear: d.integer().notNull(),
+    publisher: d.text({ length: 255 }).notNull(),
+    description: d.text(),
+    coverUrl: d.text({ length: 500 }),
+    rating: d.real().notNull().default(0),
+    totalCopies: d.integer().notNull().default(1),
+    availableCopies: d.integer().notNull().default(1),
+    tags: d.text(), // JSON string of tags array
+    createdAt: d.integer({ mode: "timestamp" }).default(sql`(unixepoch())`),
+    updatedAt: d.integer({ mode: "timestamp" }).default(sql`(unixepoch())`),
+  }),
+  (t) => [
+    index("book_category_idx").on(t.category),
+    index("book_author_idx").on(t.author),
+    index("book_publish_year_idx").on(t.publishYear),
+  ],
 );

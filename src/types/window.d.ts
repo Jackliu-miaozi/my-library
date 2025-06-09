@@ -9,7 +9,10 @@ declare global {
     ethereum?: {
       isMetaMask?: boolean;
       isCoinbaseWallet?: boolean;
-      request?: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+      request?: (args: {
+        method: string;
+        params?: unknown[];
+      }) => Promise<unknown>;
       // 添加其他可能需要的属性
       enable?: () => Promise<string[]>;
       selectedAddress?: string;

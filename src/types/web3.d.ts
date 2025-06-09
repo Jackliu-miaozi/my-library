@@ -2,7 +2,7 @@
  * Web3 相关类型定义
  */
 
-import { type ReactNode } from 'react';
+import { type ReactNode } from "react";
 
 /**
  * Web3上下文类型定义
@@ -44,7 +44,7 @@ export interface Web3ProviderProps {
  * 钱包类型枚举
  * 定义支持的钱包类型
  */
-export type WalletType = 'metamask' | 'coinbase' | 'walletconnect' | 'injected';
+export type WalletType = "metamask" | "coinbase" | "walletconnect" | "injected";
 
 /**
  * 网络配置类型

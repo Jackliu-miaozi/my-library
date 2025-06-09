@@ -36,13 +36,13 @@ export const authConfig = {
         email: {
           label: "邮箱",
           type: "email",
-          placeholder: "请输入邮箱地址"
+          placeholder: "请输入邮箱地址",
         },
         password: {
           label: "密码",
           type: "password",
-          placeholder: "请输入密码"
-        }
+          placeholder: "请输入密码",
+        },
       },
       /**
        * 验证用户凭据的函数
@@ -57,7 +57,8 @@ export const authConfig = {
         try {
           // 从数据库查找用户
           const user = await db.query.users.findFirst({
-            where: (users, { eq }) => eq(users.email, credentials.email as string),
+            where: (users, { eq }) =>
+              eq(users.email, credentials.email as string),
           });
 
           if (!user) {
@@ -66,8 +67,8 @@ export const authConfig = {
 
           // 2. 验证密码
           const isPasswordValid = await bcrypt.compare(
-            credentials.password as string ,    // 用户输入的明文密码
-            user.password ?? ""      // 数据库中的加密密码
+            credentials.password as string, // 用户输入的明文密码
+            user.password ?? "", // 数据库中的加密密码
           );
 
           if (!isPasswordValid) {

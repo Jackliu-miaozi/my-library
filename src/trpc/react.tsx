@@ -25,7 +25,7 @@ const getQueryClient = () => {
 export const api = createTRPCReact<AppRouter>();
 
 // 导出类型定义（现在从统一的类型文件导入）
-export type { RouterInputs, RouterOutputs } from "@/types/api"
+export type { RouterInputs, RouterOutputs } from "@/types/api";
 
 export function TRPCReactProvider(props: { children: React.ReactNode }) {
   const queryClient = getQueryClient();

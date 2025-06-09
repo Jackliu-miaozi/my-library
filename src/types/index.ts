@@ -9,21 +9,13 @@ export type {
   Web3ProviderProps,
   WalletType,
   NetworkConfig,
-} from './web3';
+} from "./web3";
 
 // 主题相关类型
-export type {
-  Theme,
-  ThemeProviderProps,
-  ThemeProviderState,
-} from './theme';
+export type { Theme, ThemeProviderProps, ThemeProviderState } from "./theme";
 
 // 认证相关类型
-export type {
-  UserRole,
-  LoginFormData,
-  RegisterFormData,
-} from './auth';
+export type { UserRole, LoginFormData, RegisterFormData } from "./auth";
 
 // API 相关类型
 export type {
@@ -32,8 +24,8 @@ export type {
   ApiResponse,
   PaginationParams,
   PaginatedResponse,
-} from './api';
+} from "./api";
 
 // Window 接口扩展（全局类型，无需导出）
 // 该文件会自动被 TypeScript 识别
-import './window';
+import "./window";

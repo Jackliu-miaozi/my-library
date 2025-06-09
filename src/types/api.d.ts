@@ -8,8 +8,8 @@ import type { AppRouter } from "~/server/api/root";
 /**
  * TRPC 路由输入类型推断助手
  * 用于推断 TRPC 路由的输入参数类型
- * 
- * @example 
+ *
+ * @example
  * type HelloInput = RouterInputs['example']['hello']
  */
 export type RouterInputs = inferRouterInputs<AppRouter>;
@@ -17,8 +17,8 @@ export type RouterInputs = inferRouterInputs<AppRouter>;
 /**
  * TRPC 路由输出类型推断助手
  * 用于推断 TRPC 路由的返回值类型
- * 
- * @example 
+ *
+ * @example
  * type HelloOutput = RouterOutputs['example']['hello']
  */
 export type RouterOutputs = inferRouterOutputs<AppRouter>;
@@ -50,7 +50,7 @@ export interface PaginationParams {
   /** 排序字段 */
   sortBy?: string;
   /** 排序方向 */
-  sortOrder?: 'asc' | 'desc';
+  sortOrder?: "asc" | "desc";
 }
 
 /**

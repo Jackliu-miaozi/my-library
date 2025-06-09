@@ -1,26 +1,14 @@
-"use client"
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { Search, Filter, Grid, List, BookOpen, Star, Calendar, User, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import {
+  BookOpen,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+import { api } from "@/trpc/react";
+import { BookCard, BookListItem, SearchFilters } from "@/app/_components/catalog";
 
-/**
- * 图书信息接口
- */
-interface Book {
-  id: string;
-  title: string;
-  author: string;
-  isbn: string;
-  category: string;
-  publishYear: number;
-  publisher: string;
-  description: string;
-  coverUrl?: string;
-  rating: number;
-  totalCopies: number;
-  availableCopies: number;
-  tags: string[];
-}
 
 /**
  * 筛选条件接口
@@ -38,375 +26,210 @@ interface FilterOptions {
  */
 export default function CatalogPage() {
   // 状态管理
-  const [books, setBooks] = useState<Book[]>([]);
-  const [filteredBooks, setFilteredBooks] = useState<Book[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [sortBy, setSortBy] = useState("title");
   const [currentPage, setCurrentPage] = useState(1);
-  const [isLoading, setIsLoading] = useState(true);
+  const [showDebugInfo, setShowDebugInfo] = useState(false);
   const [filters, setFilters] = useState<FilterOptions>({
-    category: '',
-    publishYear: '',
-    availability: '',
-    rating: ''
+    category: "",
+    publishYear: "",
+    availability: "",
+    rating: "",
   });
+
+  // 防抖搜索
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   const booksPerPage = 12;
 
-  // 模拟图书数据
-  const mockBooks: Book[] = [
-    {
-      id: '1',
-      title: 'JavaScript高级程序设计',
-      author: 'Nicholas C. Zakas',
-      isbn: '978-7-115-27579-0',
-      category: '计算机科学',
-      publishYear: 2020,
-      publisher: '人民邮电出版社',
-      description: '全面深入地介绍了JavaScript语言的核心概念和高级特性。',
-      rating: 4.8,
-      totalCopies: 10,
-      availableCopies: 3,
-      tags: ['编程', 'JavaScript', '前端开发']
+  // 获取 tRPC utils 用于缓存管理和预取
+  const utils = api.useUtils();
+
+  // 记忆化查询参数
+  const queryParams = useMemo(
+    () => ({
+      page: currentPage,
+      limit: booksPerPage,
+      search: debouncedSearchTerm || undefined,
+      category: filters.category || undefined,
+      publishYear: filters.publishYear
+        ? parseInt(filters.publishYear)
+        : undefined,
+      availability: filters.availability
+        ? (filters.availability as "available" | "unavailable")
+        : undefined,
+      minRating: filters.rating ? parseFloat(filters.rating) : undefined,
+    }),
+    [currentPage, booksPerPage, debouncedSearchTerm, filters],
+  );
+
+  // 使用tRPC查询图书数据
+  const {
+    data: booksData,
+    isLoading,
+    error,
+    refetch,
+  } = api.books.getBooks.useQuery(queryParams, {
+    // 启用缓存，5分钟内不重新请求
+    staleTime: 5 * 60 * 1000,
+    // 窗口重新获得焦点时不自动重新请求
+    refetchOnWindowFocus: false,
+    // 只有在有防抖搜索词或其他筛选条件时才启用查询
+    enabled: true,
+  });
+
+  // 获取分类列表
+  const { data: categories } = api.books.getCategories.useQuery(undefined, {
+    // 分类数据变化较少，缓存更长时间
+    staleTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  // 初始化示例数据的mutation
+  const seedBooksMutation = api.books.seedBooks.useMutation({
+    onSuccess: () => {
+      // 使用 utils 失效相关缓存
+      void utils.books.getBooks.invalidate();
+      void utils.books.getCategories.invalidate();
     },
-    {
-      id: '2',
-      title: 'React技术揭秘',
-      author: '卡颂',
-      isbn: '978-7-121-41234-5',
-      category: '计算机科学',
-      publishYear: 2021,
-      publisher: '电子工业出版社',
-      description: '深入解析React框架的内部实现原理和最佳实践。',
-      rating: 4.6,
-      totalCopies: 8,
-      availableCopies: 5,
-      tags: ['React', '前端框架', '源码分析']
-    },
-    {
-      id: '3',
-      title: '算法导论',
-      author: 'Thomas H. Cormen',
-      isbn: '978-7-111-40701-0',
-      category: '计算机科学',
-      publishYear: 2019,
-      publisher: '机械工业出版社',
-      description: '计算机算法领域的经典教材，涵盖了算法设计与分析的各个方面。',
-      rating: 4.9,
-      totalCopies: 15,
-      availableCopies: 0,
-      tags: ['算法', '数据结构', '计算机理论']
-    },
-    {
-      id: '4',
-      title: '深入理解计算机系统',
-      author: 'Randal E. Bryant',
-      isbn: '978-7-111-54493-7',
-      category: '计算机科学',
-      publishYear: 2018,
-      publisher: '机械工业出版社',
-      description: '从程序员的角度深入理解计算机系统的工作原理。',
-      rating: 4.7,
-      totalCopies: 12,
-      availableCopies: 2,
-      tags: ['计算机系统', '操作系统', '底层原理']
-    },
-    {
-      id: '5',
-      title: '设计模式',
-      author: 'Erich Gamma',
-      isbn: '978-7-111-21116-6',
-      category: '计算机科学',
-      publishYear: 2017,
-      publisher: '机械工业出版社',
-      description: '面向对象软件设计的经典之作，介绍了23种设计模式。',
-      rating: 4.5,
-      totalCopies: 6,
-      availableCopies: 4,
-      tags: ['设计模式', '面向对象', '软件工程']
-    },
-    {
-      id: '6',
-      title: 'Node.js实战',
-      author: 'Mike Cantelon',
-      isbn: '978-7-115-35234-1',
-      category: '计算机科学',
-      publishYear: 2022,
-      publisher: '人民邮电出版社',
-      description: '全面介绍Node.js开发的实战技巧和最佳实践。',
-      rating: 4.4,
-      totalCopies: 9,
-      availableCopies: 6,
-      tags: ['Node.js', '后端开发', 'JavaScript']
-    }
-  ];
+  });
+
+  // 处理数据
+  const books = booksData?.books ?? [];
+  const pagination = booksData?.pagination;
 
   /**
-   * 初始化数据
+   * 初始化示例数据
    */
-  useEffect(() => {
-    // 模拟API调用
-    setTimeout(() => {
-      setBooks(mockBooks);
-      setFilteredBooks(mockBooks);
-      setIsLoading(false);
-    }, 1000);
-  }, []);
+  const handleSeedBooks = () => {
+    seedBooksMutation.mutate();
+  };
 
   /**
-   * 搜索和筛选逻辑
+   * 处理图书借阅（模拟功能，使用乐观更新）
+   */
+  const handleBorrowBook = useCallback(
+    async (bookId: string) => {
+      // 乐观更新：立即更新UI
+      utils.books.getBooks.setData(queryParams, (oldData) => {
+        if (!oldData) return oldData;
+
+        return {
+          ...oldData,
+          books: oldData.books.map((book) =>
+            book.id === bookId
+              ? {
+                  ...book,
+                  availableCopies: Math.max(0, book.availableCopies - 1),
+                }
+              : book,
+          ),
+        };
+      });
+
+      try {
+        // 这里应该调用实际的借阅API
+        // await api.books.borrowBook.mutate({ bookId });
+        console.log(`借阅图书: ${bookId}`);
+
+        // 模拟API延迟
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        // 成功后可以选择性地重新验证数据
+        // utils.books.getBooks.invalidate(queryParams);
+      } catch (error) {
+        // 如果失败，回滚乐观更新
+        void utils.books.getBooks.invalidate(queryParams);
+        console.error("借阅失败:", error);
+      }
+    },
+    [queryParams, utils.books.getBooks],
+  );
+
+  /**
+   * 当筛选条件改变时重置到第一页
    */
   useEffect(() => {
-    let result = books;
-
-    // 搜索过滤
-    if (searchTerm) {
-      result = result.filter(book => 
-        book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        book.author.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        book.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
-      );
-    }
-
-    // 分类过滤
-    if (filters.category) {
-      result = result.filter(book => book.category === filters.category);
-    }
-
-    // 出版年份过滤
-    if (filters.publishYear) {
-      const year = parseInt(filters.publishYear);
-      result = result.filter(book => book.publishYear >= year);
-    }
-
-    // 可用性过滤
-    if (filters.availability === 'available') {
-      result = result.filter(book => book.availableCopies > 0);
-    } else if (filters.availability === 'unavailable') {
-      result = result.filter(book => book.availableCopies === 0);
-    }
-
-    // 评分过滤
-    if (filters.rating) {
-      const minRating = parseFloat(filters.rating);
-      result = result.filter(book => book.rating >= minRating);
-    }
-
-    setFilteredBooks(result);
     setCurrentPage(1);
-  }, [searchTerm, filters, books]);
+  }, [debouncedSearchTerm, filters]);
+
+  /**
+   * 预取下一页数据
+   */
+  useEffect(() => {
+    const totalPages = pagination?.totalPages ?? 0;
+    if (currentPage < totalPages) {
+      // 预取下一页数据
+      void utils.books.getBooks.prefetch({
+        ...queryParams,
+        page: currentPage + 1,
+      });
+    }
+  }, [currentPage, pagination?.totalPages, queryParams, utils.books.getBooks]);
+
+  /**
+   * 智能缓存管理：在用户空闲时预取热门数据
+   */
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      // 预取热门分类的数据
+      if (categories && categories.length > 0) {
+        void utils.books.getBooks.prefetch({
+          page: 1,
+          limit: booksPerPage,
+          category: categories[0],
+          sortBy: "rating",
+          sortOrder: "desc",
+        });
+      }
+    }, 2000); // 2秒后预取
+
+    return () => clearTimeout(timer);
+  }, [categories, utils.books.getBooks, booksPerPage]);
 
   /**
    * 处理筛选条件变化
    */
   const handleFilterChange = (key: keyof FilterOptions, value: string) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
+    setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
   /**
    * 清除所有筛选条件
    */
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setFilters({
-      category: '',
-      publishYear: '',
-      availability: '',
-      rating: ''
+      category: "",
+      publishYear: "",
+      availability: "",
+      rating: "",
     });
-    setSearchTerm('');
-  };
+    setSearchTerm("");
+    setDebouncedSearchTerm("");
+    setCurrentPage(1);
 
-  /**
-   * 渲染星级评分
-   */
-  const renderStars = (rating: number) => {
-    return Array.from({ length: 5 }, (_, index) => (
-      <Star
-        key={index}
-        className={`w-4 h-4 ${
-          index < Math.floor(rating) 
-            ? 'text-yellow-400 fill-current' 
-            : 'text-gray-300'
-        }`}
-      />
-    ));
-  };
+    // 清除相关缓存，强制重新获取数据
+    void utils.books.getBooks.invalidate();
+  }, [utils.books.getBooks]);
 
   // 分页计算
-  const totalPages = Math.ceil(filteredBooks.length / booksPerPage);
-  const startIndex = (currentPage - 1) * booksPerPage;
-  const endIndex = startIndex + booksPerPage;
-  const currentBooks = filteredBooks.slice(startIndex, endIndex);
-
-  /**
-   * 图书卡片组件
-   */
-  const BookCard = ({ book }: { book: Book }) => (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden group">
-      {/* 图书封面 */}
-      <div className="relative h-48 bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900 flex items-center justify-center">
-        {book.coverUrl ? (
-          <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" />
-        ) : (
-          <BookOpen className="w-16 h-16 text-blue-500 dark:text-blue-400" />
-        )}
-        {/* 可用性标识 */}
-        <div className={`absolute top-3 right-3 px-2 py-1 rounded-full text-xs font-medium ${
-          book.availableCopies > 0 
-            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-            : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-        }`}>
-          {book.availableCopies > 0 ? '可借阅' : '已借完'}
-        </div>
-      </div>
-
-      {/* 图书信息 */}
-      <div className="p-4">
-        <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100 mb-2 line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-          {book.title}
-        </h3>
-        
-        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-2">
-          <User className="w-4 h-4" />
-          <span>{book.author}</span>
-        </div>
-        
-        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-3">
-          <Calendar className="w-4 h-4" />
-          <span>{book.publishYear}年 · {book.publisher}</span>
-        </div>
-        
-        {/* 评分 */}
-        <div className="flex items-center gap-2 mb-3">
-          <div className="flex">
-            {renderStars(book.rating)}
-          </div>
-          <span className="text-sm text-gray-600 dark:text-gray-400">{book.rating}</span>
-        </div>
-        
-        {/* 标签 */}
-        <div className="flex flex-wrap gap-1 mb-3">
-          {book.tags.slice(0, 3).map((tag, index) => (
-            <span key={index} className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs rounded-full">
-              {tag}
-            </span>
-          ))}
-        </div>
-        
-        {/* 库存信息 */}
-        <div className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-          可借: {book.availableCopies}/{book.totalCopies} 本
-        </div>
-        
-        {/* 操作按钮 */}
-        <div className="flex gap-2">
-          <button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors duration-200 text-sm font-medium">
-            查看详情
-          </button>
-          <button 
-            disabled={book.availableCopies === 0}
-            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors duration-200 ${
-              book.availableCopies > 0
-                ? 'bg-green-600 hover:bg-green-700 text-white'
-                : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-            }`}
-          >
-            {book.availableCopies > 0 ? '借阅' : '已借完'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-
-  /**
-   * 列表视图图书项组件
-   */
-  const BookListItem = ({ book }: { book: Book }) => (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-4">
-      <div className="flex gap-4">
-        {/* 图书封面 */}
-        <div className="w-20 h-28 bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900 rounded-lg flex items-center justify-center flex-shrink-0">
-          {book.coverUrl ? (
-            <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover rounded-lg" />
-          ) : (
-            <BookOpen className="w-8 h-8 text-blue-500 dark:text-blue-400" />
-          )}
-        </div>
-        
-        {/* 图书信息 */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between mb-2">
-            <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer">
-              {book.title}
-            </h3>
-            <div className={`px-3 py-1 rounded-full text-xs font-medium ml-4 ${
-              book.availableCopies > 0 
-                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-            }`}>
-              {book.availableCopies > 0 ? '可借阅' : '已借完'}
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-600 dark:text-gray-400 mb-3">
-            <div className="flex items-center gap-2">
-              <User className="w-4 h-4" />
-              <span>{book.author}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4" />
-              <span>{book.publishYear}年 · {book.publisher}</span>
-            </div>
-          </div>
-          
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
-            {book.description}
-          </p>
-          
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              {/* 评分 */}
-              <div className="flex items-center gap-2">
-                <div className="flex">
-                  {renderStars(book.rating)}
-                </div>
-                <span className="text-sm text-gray-600 dark:text-gray-400">{book.rating}</span>
-              </div>
-              
-              {/* 库存 */}
-              <span className="text-sm text-gray-600 dark:text-gray-400">
-                可借: {book.availableCopies}/{book.totalCopies}
-              </span>
-            </div>
-            
-            {/* 操作按钮 */}
-            <div className="flex gap-2">
-              <button className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors duration-200 text-sm font-medium">
-                查看详情
-              </button>
-              <button 
-                disabled={book.availableCopies === 0}
-                className={`py-2 px-4 rounded-lg text-sm font-medium transition-colors duration-200 ${
-                  book.availableCopies > 0
-                    ? 'bg-green-600 hover:bg-green-700 text-white'
-                    : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                }`}
-              >
-                {book.availableCopies > 0 ? '借阅' : '已借完'}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  const totalPages = pagination?.totalPages ?? 0;
+  const currentBooks = books;
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600"></div>
           <p className="text-gray-600 dark:text-gray-400">加载图书目录中...</p>
         </div>
       </div>
@@ -417,8 +240,8 @@ export default function CatalogPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       <div className="container mx-auto px-4 py-8">
         {/* 页面标题 */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+        <div className="mb-8 text-center">
+          <h1 className="mb-4 text-4xl font-bold text-gray-900 dark:text-gray-100">
             图书目录
           </h1>
           <p className="text-lg text-gray-600 dark:text-gray-400">
@@ -426,217 +249,167 @@ export default function CatalogPage() {
           </p>
         </div>
 
-        {/* 搜索和筛选栏 */}
-        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-2xl shadow-xl border border-white/20 dark:border-gray-600/30 p-6 mb-8">
-          <div className="flex flex-col lg:flex-row gap-4">
-            {/* 搜索框 */}
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder="搜索图书标题、作者或标签..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-white/50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-              />
-            </div>
-            
-            {/* 筛选按钮 */}
-            <button
-              onClick={() => setIsFilterOpen(!isFilterOpen)}
-              className="flex items-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors duration-200 font-medium"
-            >
-              <Filter className="w-5 h-5" />
-              筛选
-              <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isFilterOpen ? 'rotate-180' : ''}`} />
-            </button>
-            
-            {/* 视图切换 */}
-            <div className="flex bg-gray-100 dark:bg-gray-700 rounded-xl p-1">
+        {/* 搜索和筛选组件 */}
+        <SearchFilters
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          selectedCategory={filters.category}
+          onCategoryChange={(value) => handleFilterChange("category", value)}
+          sortBy={sortBy}
+          onSortChange={setSortBy}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          showFilters={isFilterOpen}
+          onToggleFilters={() => setIsFilterOpen(!isFilterOpen)}
+          categories={categories}
+          availability={filters.availability}
+          onAvailabilityChange={(value) => handleFilterChange("availability", value)}
+          publishYear={filters.publishYear}
+          onPublishYearChange={(value) => handleFilterChange("publishYear", value)}
+          rating={filters.rating}
+          onRatingChange={(value) => handleFilterChange("rating", value)}
+          onClearFilters={clearFilters}
+        />
+
+        {/* 结果统计 */}
+        <div className="mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <p className="text-gray-600 dark:text-gray-400">
+              共找到{" "}
+              <span className="font-semibold text-gray-900 dark:text-gray-100">
+                {pagination?.total ?? 0}
+              </span>{" "}
+              本图书
+            </p>
+            {books.length === 0 && !isLoading && (
               <button
-                onClick={() => setViewMode('grid')}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors duration-200 ${
-                  viewMode === 'grid'
-                    ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                }`}
+                onClick={handleSeedBooks}
+                disabled={seedBooksMutation.isPending}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors duration-200 hover:bg-blue-700 disabled:opacity-50"
               >
-                <Grid className="w-4 h-4" />
-                网格
+                {seedBooksMutation.isPending ? "初始化中..." : "初始化示例数据"}
               </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors duration-200 ${
-                  viewMode === 'list'
-                    ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                }`}
-              >
-                <List className="w-4 h-4" />
-                列表
-              </button>
-            </div>
+            )}
           </div>
-          
-          {/* 筛选选项 */}
-          {isFilterOpen && (
-            <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-600">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* 分类筛选 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    分类
-                  </label>
-                  <select
-                    value={filters.category}
-                    onChange={(e) => handleFilterChange('category', e.target.value)}
-                    className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">所有分类</option>
-                    <option value="计算机科学">计算机科学</option>
-                    <option value="文学">文学</option>
-                    <option value="历史">历史</option>
-                    <option value="科学">科学</option>
-                  </select>
-                </div>
-                
-                {/* 出版年份筛选 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    出版年份
-                  </label>
-                  <select
-                    value={filters.publishYear}
-                    onChange={(e) => handleFilterChange('publishYear', e.target.value)}
-                    className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">所有年份</option>
-                    <option value="2020">2020年及以后</option>
-                    <option value="2015">2015年及以后</option>
-                    <option value="2010">2010年及以后</option>
-                  </select>
-                </div>
-                
-                {/* 可用性筛选 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    可用性
-                  </label>
-                  <select
-                    value={filters.availability}
-                    onChange={(e) => handleFilterChange('availability', e.target.value)}
-                    className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">全部</option>
-                    <option value="available">可借阅</option>
-                    <option value="unavailable">已借完</option>
-                  </select>
-                </div>
-                
-                {/* 评分筛选 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    最低评分
-                  </label>
-                  <select
-                    value={filters.rating}
-                    onChange={(e) => handleFilterChange('rating', e.target.value)}
-                    className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">所有评分</option>
-                    <option value="4.5">4.5星及以上</option>
-                    <option value="4.0">4.0星及以上</option>
-                    <option value="3.5">3.5星及以上</option>
-                  </select>
-                </div>
-              </div>
-              
-              {/* 清除筛选按钮 */}
-              <div className="mt-4 flex justify-end">
-                <button
-                  onClick={clearFilters}
-                  className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors duration-200"
-                >
-                  清除筛选
-                </button>
-              </div>
-            </div>
+          {pagination && (
+            <p className="text-sm text-gray-500 dark:text-gray-500">
+              第 {(currentPage - 1) * booksPerPage + 1}-
+              {Math.min(currentPage * booksPerPage, pagination.total)} 本，共{" "}
+              {pagination.total} 本
+            </p>
           )}
         </div>
 
-        {/* 结果统计 */}
-        <div className="flex items-center justify-between mb-6">
-          <p className="text-gray-600 dark:text-gray-400">
-            共找到 <span className="font-semibold text-gray-900 dark:text-gray-100">{filteredBooks.length}</span> 本图书
-          </p>
-          <p className="text-sm text-gray-500 dark:text-gray-500">
-            第 {startIndex + 1}-{Math.min(endIndex, filteredBooks.length)} 本，共 {filteredBooks.length} 本
-          </p>
-        </div>
-
-        {/* 图书展示区域 */}
-        {currentBooks.length === 0 ? (
-          <div className="text-center py-16">
-            <BookOpen className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
-              未找到相关图书
-            </h3>
+        {/* 加载状态 */}
+        {isLoading ? (
+          <div className="py-16 text-center">
+            <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600"></div>
             <p className="text-gray-600 dark:text-gray-400">
-              请尝试调整搜索条件或筛选选项
+              {searchTerm !== debouncedSearchTerm
+                ? "正在搜索..."
+                : "正在加载图书数据..."}
             </p>
+            {searchTerm !== debouncedSearchTerm && (
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-500">
+                搜索词: &quot;{searchTerm}&quot;
+              </p>
+            )}
+          </div>
+        ) : error ? (
+          <div className="py-16 text-center">
+            <BookOpen className="mx-auto mb-4 h-16 w-16 text-red-400" />
+            <h3 className="mb-2 text-xl font-semibold text-gray-900 dark:text-gray-100">
+              加载失败
+            </h3>
+            <p className="mb-4 text-gray-600 dark:text-gray-400">
+              {error.message || "获取图书数据时出现错误"}
+            </p>
+            <button
+              onClick={() => refetch()}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors duration-200 hover:bg-blue-700"
+            >
+              重试
+            </button>
+          </div>
+        ) : currentBooks.length === 0 ? (
+          <div className="py-16 text-center">
+            <BookOpen className="mx-auto mb-4 h-16 w-16 text-gray-400" />
+            <h3 className="mb-2 text-xl font-semibold text-gray-900 dark:text-gray-100">
+              {books.length === 0 ? "暂无图书数据" : "未找到相关图书"}
+            </h3>
+            <p className="mb-4 text-gray-600 dark:text-gray-400">
+              {books.length === 0
+                ? "点击下方按钮初始化示例数据"
+                : "请尝试调整搜索条件或筛选选项"}
+            </p>
+            {books.length === 0 && (
+              <button
+                onClick={handleSeedBooks}
+                disabled={seedBooksMutation.isPending}
+                className="rounded-lg bg-blue-600 px-6 py-3 text-white transition-colors duration-200 hover:bg-blue-700 disabled:opacity-50"
+              >
+                {seedBooksMutation.isPending ? "初始化中..." : "初始化示例数据"}
+              </button>
+            )}
           </div>
         ) : (
-          <div className={`${
-            viewMode === 'grid'
-              ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'
-              : 'space-y-4'
-          }`}>
-            {currentBooks.map((book) => (
-              viewMode === 'grid' ? (
-                <BookCard key={book.id} book={book} />
+          <div
+            className={`${
+              viewMode === "grid"
+                ? "grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                : "space-y-4"
+            }`}
+          >
+            {currentBooks.map((book) =>
+              viewMode === "grid" ? (
+                <BookCard key={book.id} book={book} onBorrow={handleBorrowBook} />
               ) : (
-                <BookListItem key={book.id} book={book} />
-              )
-            ))}
+                <BookListItem key={book.id} book={book} onBorrow={handleBorrowBook} />
+              ),
+            )}
           </div>
         )}
 
         {/* 分页 */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-center mt-12 gap-2">
+          <div className="mt-12 flex items-center justify-center gap-2">
             <button
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
               disabled={currentPage === 1}
-              className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+              className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 transition-colors duration-200 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:hover:bg-gray-700"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <ChevronLeft className="h-4 w-4" />
               上一页
             </button>
-            
+
             <div className="flex gap-1">
               {Array.from({ length: totalPages }, (_, index) => {
                 const page = index + 1;
                 const isCurrentPage = page === currentPage;
-                const shouldShow = 
-                  page === 1 || 
-                  page === totalPages || 
+                const shouldShow =
+                  page === 1 ||
+                  page === totalPages ||
                   (page >= currentPage - 1 && page <= currentPage + 1);
-                
+
                 if (!shouldShow) {
                   if (page === currentPage - 2 || page === currentPage + 2) {
-                    return <span key={page} className="px-2 py-2 text-gray-400">...</span>;
+                    return (
+                      <span key={page} className="px-2 py-2 text-gray-400">
+                        ...
+                      </span>
+                    );
                   }
                   return null;
                 }
-                
+
                 return (
                   <button
                     key={page}
                     onClick={() => setCurrentPage(page)}
-                    className={`px-4 py-2 rounded-lg transition-colors duration-200 ${
+                    className={`rounded-lg px-4 py-2 transition-colors duration-200 ${
                       isCurrentPage
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                        ? "bg-blue-600 text-white"
+                        : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                     }`}
                   >
                     {page}
@@ -644,18 +417,69 @@ export default function CatalogPage() {
                 );
               })}
             </div>
-            
+
             <button
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              onClick={() =>
+                setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+              }
               disabled={currentPage === totalPages}
-              className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+              className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 transition-colors duration-200 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:hover:bg-gray-700"
             >
               下一页
-              <ChevronRight className="w-4 h-4" />
+              <ChevronRight className="h-4 w-4" />
             </button>
           </div>
         )}
       </div>
+
+      {/* 调试信息面板 */}
+      {showDebugInfo && (
+        <div className="mt-8 rounded-lg border bg-gray-100 p-4 dark:bg-gray-800">
+          <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
+            调试信息
+          </h3>
+          <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2 lg:grid-cols-3">
+            <div>
+              <h4 className="mb-2 font-medium text-gray-700 dark:text-gray-300">
+                查询状态
+              </h4>
+              <p>加载中: {isLoading ? "是" : "否"}</p>
+              <p>错误: {error ? "是" : "否"}</p>
+              <p>数据获取中: {isLoading ? "是" : "否"}</p>
+              <p>后台更新: {isLoading ? "是" : "否"}</p>
+            </div>
+            <div>
+              <h4 className="mb-2 font-medium text-gray-700 dark:text-gray-300">
+                搜索状态
+              </h4>
+              <p>当前搜索词: &quot;{searchTerm}&quot;</p>
+              <p>防抖搜索词: &quot;{debouncedSearchTerm}&quot;</p>
+              <p>
+                搜索延迟:{" "}
+                {searchTerm !== debouncedSearchTerm ? "等待中" : "已同步"}
+              </p>
+            </div>
+            <div>
+              <h4 className="mb-2 font-medium text-gray-700 dark:text-gray-300">
+                分页信息
+              </h4>
+              <p>当前页: {currentPage}</p>
+              <p>总页数: {pagination?.totalPages ?? 0}</p>
+              <p>总数量: {pagination?.total ?? 0}</p>
+              <p>每页数量: {booksPerPage}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 调试开关 */}
+      <button
+        onClick={() => setShowDebugInfo(!showDebugInfo)}
+        className="fixed right-4 bottom-4 z-50 rounded-full bg-blue-600 p-2 text-white shadow-lg transition-colors hover:bg-blue-700"
+        title="切换调试信息"
+      >
+        {showDebugInfo ? "🔍" : "🐛"}
+      </button>
     </div>
   );
 }

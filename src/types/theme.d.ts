@@ -2,7 +2,7 @@
  * 主题相关类型定义
  */
 
-import { type ReactNode } from 'react';
+import { type ReactNode } from "react";
 
 /**
  * 主题类型
